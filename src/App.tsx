@@ -39,6 +39,9 @@ function SortableTask({ task, onDelete }: any) {
 
   const [confirming, setConfirming] = useState(false);
 
+  const isOverdue =
+    task.due_date && new Date(task.due_date) < new Date();
+
   return (
     <div
       ref={setNodeRef}
@@ -50,8 +53,12 @@ function SortableTask({ task, onDelete }: any) {
         marginBottom: "10px",
         borderRadius: "10px",
         color: COLORS.white,
-        border: "1px solid rgba(255,255,255,0.06)",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+        border: isOverdue
+          ? "1px solid rgba(239,68,68,0.7)"
+          : "1px solid rgba(255,255,255,0.06)",
+        boxShadow: isOverdue
+          ? "0 0 10px rgba(239,68,68,0.6), 0 0 20px rgba(239,68,68,0.4)"
+          : "0 4px 12px rgba(0,0,0,0.35)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -82,13 +89,21 @@ function SortableTask({ task, onDelete }: any) {
           )}
 
           {task.due_date && (
-            <div style={{ fontSize: "12px", marginTop: "4px" }}>
-              Due: {task.due_date}
+            <div
+              style={{
+                fontSize: "12px",
+                marginTop: "4px",
+                color: isOverdue ? "#ef4444" : "#cbd5f5",
+                fontWeight: isOverdue ? "600" : "normal",
+              }}
+            >
+              {isOverdue
+                ? `Overdue: ${task.due_date}`
+                : `Due: ${task.due_date}`}
             </div>
           )}
         </div>
 
-        {/* CONFIRM DELETE */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {confirming ? (
             <>
@@ -201,7 +216,7 @@ function App() {
     "done",
   ];
 
-  /* ===== STATS ===== */
+  // ✅ COUNTER LOGIC (restored)
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const inProgressTasks = tasks.filter(
@@ -302,32 +317,22 @@ function App() {
           background: `linear-gradient(180deg, ${COLORS.bgTop}, ${COLORS.bgBottom})`,
         }}
       >
-        <h1
+        {/* HEADER + COUNTER */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+          <h1
   style={{
-    fontSize: "31px",
-    fontWeight: "600",
-    marginBottom: "10px",
+    fontSize: "30px",
+    fontWeight: "700",
+    letterSpacing: "0.5px",
+    margin: 0,
     background: "linear-gradient(90deg, #2dd4bf, #0ea5e9, #fb923c)",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
-    letterSpacing: "0.5px",
+    textShadow: "0 0 10px rgba(45,212,191,0.25)",
   }}
 >
   Task Board
 </h1>
-
-        {/* DASHBOARD + STATS */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "5px",
-          }}
-        >
-          <div style={{ color: COLORS.white, fontSize: "18px", fontWeight: "500" }}>
-            Dashboard
-          </div>
 
           <div style={{ display: "flex", gap: "20px", color: "#cbd5f5" }}>
             <span>Total: {totalTasks}</span>
@@ -343,40 +348,44 @@ function App() {
         <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
           <input value={newTask} onChange={(e)=>setNewTask(e.target.value)} placeholder="Title" style={inputStyle}/>
           <input value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Description" style={inputStyle}/>
+          
+     {/* PRIORITY LABEL */}
+<div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+    Priority
+  </span>
+  <select
+    value={priority}
+    onChange={(e) => setPriority(e.target.value)}
+    style={{ ...inputStyle, width: "140px" }}
+  >
+    <option value="low">Low</option>
+    <option value="normal">Normal</option>
+    <option value="high">High</option>
+  </select>
+</div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "#94a3b8" }}>Priority</span>
-            <select value={priority} onChange={(e)=>setPriority(e.target.value)} style={{ ...inputStyle, width: "140px" }}>
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "#94a3b8" }}>Due</span>
-            <input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} style={{ ...inputStyle, width: "140px" }}/>
-          </div>
-
-          <button
-            onClick={createTask}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              background: "linear-gradient(135deg, #2dd4bf, #0ea5e9)",
-              color: "white",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
+{/* DUE LABEL */}
+<div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+    Due
+  </span>
+  <input
+    type="date"
+    value={dueDate}
+    onChange={(e) => setDueDate(e.target.value)}
+    style={{ ...inputStyle, width: "140px" }}
+  />
+</div>
+          
+          <button onClick={createTask} style={{ padding: "10px", background: COLORS.aqua, border: "none", borderRadius: "8px" }}>
             Add
           </button>
-
           <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search..." style={inputStyle}/>
         </div>
 
         {/* BOARD */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px" }}>
           {statuses.map((status) => (
             <Column key={status} status={status} tasks={filteredTasks.filter((t)=>t.status===status)} onDelete={deleteTask}/>
           ))}
