@@ -1,27 +1,34 @@
+// Import React hooks for state management and side effects
 import { useEffect, useState } from "react";
+// Import Supabase client for backend database operations
 import { supabase } from "./lib/supabase";
+// Import TypeScript type definition for Task objects
 import type { Task } from "./types";
 
+// Import drag-and-drop utilities from dnd-kit library
 import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 /* ================= COLORS ================= */
+// Centralized color palette for consistent styling across the app
 const COLORS = {
-  bgTop: "#0a2540",
-  bgBottom: "#08182e",
-  card: "rgba(30, 58, 95, 0.95)",
-  border: "#1e3a5f",
-  aqua: "#2dd4bf",
-  orange: "#fb923c",
-  white: "#f8fafc",
+  bgTop: "#0a2540",                    // Dark blue gradient top
+  bgBottom: "#08182e",                 // Darker blue gradient bottom
+  card: "rgba(30, 58, 95, 0.95)",      // Semi-transparent card background
+  border: "#1e3a5f",                   // Border color for columns and cards
+  aqua: "#2dd4bf",                     // Teal/aqua accent color for headers
+  orange: "#fb923c",                   // Orange accent for delete button
+  white: "#f8fafc",                    // Off-white text color
 };
 
 /* ================= INPUT STYLE ================= */
+// Reusable inline style object for input fields and selects
 const inputStyle = {
   padding: "10px 12px",
   borderRadius: "8px",
@@ -33,14 +40,17 @@ const inputStyle = {
 };
 
 /* ================= SORTABLE TASK ================= */
+// Component that renders an individual task card with drag-and-drop and delete functionality
 function SortableTask({ task, onDelete }: any) {
+  // Destructure drag-and-drop props from useSortable hook
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: task.id });
 
+  // State to track whether delete confirmation is shown for this task
   const [confirming, setConfirming] = useState(false);
 
-  const isOverdue =
-    task.due_date && new Date(task.due_date) < new Date();
+  // Check if the task's due date has passed (overdue)
+  const isOverdue = task.due_date && new Date(task.due_date) < new Date();
 
   return (
     <div
@@ -165,7 +175,9 @@ function SortableTask({ task, onDelete }: any) {
 }
 
 /* ================= COLUMN ================= */
+// Component that represents a single status column (Todo, In Progress, etc.)
 function Column({ status, tasks, onDelete }: any) {
+  // Make this column a droppable area for drag-and-drop
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
@@ -199,16 +211,21 @@ function Column({ status, tasks, onDelete }: any) {
 }
 
 /* ================= APP ================= */
+// Main application component
 function App() {
+  // State for storing all tasks fetched from Supabase
   const [tasks, setTasks] = useState<Task[]>([]);
+  // State for tracking which task is currently being dragged
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
+  // Form input states for creating new tasks
   const [search, setSearch] = useState("");
   const [newTask, setNewTask] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("normal");
   const [dueDate, setDueDate] = useState("");
 
+  // Define all possible task statuses in order (board columns)
   const statuses: Task["status"][] = [
     "todo",
     "in_progress",
@@ -216,7 +233,7 @@ function App() {
     "done",
   ];
 
-  // ✅ COUNTER LOGIC (restored)
+  // Derived statistics for the header counters
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const inProgressTasks = tasks.filter(
@@ -227,6 +244,7 @@ function App() {
     return new Date(t.due_date) < new Date();
   }).length;
 
+  // Effect hook to ensure user is authenticated anonymously
   useEffect(() => {
     async function ensureGuest() {
       const { data } = await supabase.auth.getSession();
@@ -237,15 +255,18 @@ function App() {
     ensureGuest();
   }, []);
 
+  // Function to fetch all tasks from Supabase
   async function fetchTasks() {
     const { data } = await supabase.from("tasks").select("*");
     setTasks(data || []);
   }
 
+  // Effect hook to fetch tasks when component mounts
   useEffect(() => {
     fetchTasks();
   }, []);
 
+  // Function to create a new task in Supabase
   async function createTask() {
     if (!newTask.trim()) return;
 
@@ -273,15 +294,18 @@ function App() {
     setDueDate("");
   }
 
+  // Function to delete a task from Supabase
   async function deleteTask(id: string) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
     await supabase.from("tasks").delete().eq("id", id);
   }
 
+  // Function to update a task's status (move between columns)
   async function updateTaskStatus(taskId: string, newStatus: Task["status"]) {
     await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
   }
 
+  // Filter tasks based on search input (case-insensitive title match)
   const filteredTasks = tasks.filter((t) =>
     t.title.toLowerCase().includes(search.toLowerCase())
   );
@@ -293,11 +317,21 @@ function App() {
         setActiveTask(t || null);
       }}
       onDragEnd={({ active, over }) => {
-        if (!over) return;
+        if (!over) {
+          setActiveTask(null);
+          return;
+        }
 
         const activeId = active.id as string;
         const overId = over.id as string;
 
+        const draggedTask = tasks.find((t) => t.id === activeId);
+        if (!draggedTask) {
+          setActiveTask(null);
+          return;
+        }
+
+        // Dropped onto an empty column area / column itself
         if (statuses.includes(overId as Task["status"])) {
           setTasks((prev) =>
             prev.map((t) =>
@@ -307,7 +341,43 @@ function App() {
             )
           );
           updateTaskStatus(activeId, overId as Task["status"]);
+          setActiveTask(null);
+          return;
         }
+
+        // Dropped onto another task
+        const overTask = tasks.find((t) => t.id === overId);
+        if (!overTask) {
+          setActiveTask(null);
+          return;
+        }
+
+        // Reorder inside the same column
+        if (draggedTask.status === overTask.status) {
+          const columnTasks = tasks.filter(
+            (t) => t.status === draggedTask.status
+          );
+
+          const oldIndex = columnTasks.findIndex((t) => t.id === activeId);
+          const newIndex = columnTasks.findIndex((t) => t.id === overId);
+
+          const reordered = arrayMove(columnTasks, oldIndex, newIndex);
+
+          setTasks((prev) => {
+            const others = prev.filter((t) => t.status !== draggedTask.status);
+            return [...others, ...reordered];
+          });
+        } else {
+          // Move onto a task in another column
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === activeId ? { ...t, status: overTask.status } : t
+            )
+          );
+          updateTaskStatus(activeId, overTask.status);
+        }
+
+        setActiveTask(null);
       }}
     >
       <div
@@ -318,21 +388,28 @@ function App() {
         }}
       >
         {/* HEADER + COUNTER */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "16px",
+          }}
+        >
           <h1
-  style={{
-    fontSize: "30px",
-    fontWeight: "700",
-    letterSpacing: "0.5px",
-    margin: 0,
-    background: "linear-gradient(90deg, #2dd4bf, #0ea5e9, #fb923c)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    textShadow: "0 0 10px rgba(45,212,191,0.25)",
-  }}
->
-  Task Board
-</h1>
+            style={{
+              fontSize: "30px",
+              fontWeight: "700",
+              letterSpacing: "0.5px",
+              margin: 0,
+              background: "linear-gradient(90deg, #2dd4bf, #0ea5e9, #fb923c)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              textShadow: "0 0 10px rgba(45,212,191,0.25)",
+            }}
+          >
+            Task Board
+          </h1>
 
           <div style={{ display: "flex", gap: "20px", color: "#cbd5f5" }}>
             <span>Total: {totalTasks}</span>
@@ -345,49 +422,90 @@ function App() {
         </div>
 
         {/* INPUT ROW */}
-        <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-          <input value={newTask} onChange={(e)=>setNewTask(e.target.value)} placeholder="Title" style={inputStyle}/>
-          <input value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Description" style={inputStyle}/>
-          
-     {/* PRIORITY LABEL */}
-<div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-    Priority
-  </span>
-  <select
-    value={priority}
-    onChange={(e) => setPriority(e.target.value)}
-    style={{ ...inputStyle, width: "140px" }}
-  >
-    <option value="low">Low</option>
-    <option value="normal">Normal</option>
-    <option value="high">High</option>
-  </select>
-</div>
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            marginBottom: "20px",
+            flexWrap: "wrap",
+          }}
+        >
+          <input
+            value={newTask}
+            onChange={(e) => setNewTask(e.target.value)}
+            placeholder="Title"
+            style={inputStyle}
+          />
 
-{/* DUE LABEL */}
-<div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-    Due
-  </span>
-  <input
-    type="date"
-    value={dueDate}
-    onChange={(e) => setDueDate(e.target.value)}
-    style={{ ...inputStyle, width: "140px" }}
-  />
-</div>
-          
-          <button onClick={createTask} style={{ padding: "10px", background: COLORS.aqua, border: "none", borderRadius: "8px" }}>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            style={inputStyle}
+          />
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+              Priority
+            </span>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              style={{ ...inputStyle, width: "140px" }}
+            >
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "12px", color: "#94a3b8" }}>Due</span>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              style={{ ...inputStyle, width: "140px" }}
+            />
+          </div>
+
+          <button
+            onClick={createTask}
+            style={{
+              padding: "10px 16px",
+              borderRadius: "8px",
+              background: "linear-gradient(135deg, #2dd4bf, #0ea5e9)",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
             Add
           </button>
-          <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search..." style={inputStyle}/>
+
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search..."
+            style={inputStyle}
+          />
         </div>
 
         {/* BOARD */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "20px",
+          }}
+        >
           {statuses.map((status) => (
-            <Column key={status} status={status} tasks={filteredTasks.filter((t)=>t.status===status)} onDelete={deleteTask}/>
+            <Column
+              key={status}
+              status={status}
+              tasks={filteredTasks.filter((t) => t.status === status)}
+              onDelete={deleteTask}
+            />
           ))}
         </div>
       </div>
